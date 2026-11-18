@@ -1,113 +1,183 @@
-# Palco do Saber — game show de conhecimentos
+# Palco do Saber
 
-Aplicativo web de perguntas e respostas com experiência de programa de auditório: apresentador virtual com legendas, trilha sonora procedural, efeitos sintetizados, suspense antes da revelação, ajudas, escada de premiação (fictícia), modos de jogo, estatísticas, ranking e painel administrativo.
+O Palco do Saber é um jogo de perguntas e respostas inspirado em programas de conhecimento e competição. A proposta é colocar o jogador diante de uma sequência de perguntas, com alternativas, ajudas e uma escada de premiação fictícia.
 
-Nome, marca, cenário, músicas e vozes são originais. O projeto não usa marcas, gravações, nem a voz de Silvio Santos.
+A experiência reúne apresentação de perguntas, trilha sonora, efeitos, suspense nas revelações, estatísticas e diferentes formas de jogar.
 
-## Arquitetura
+## O que o jogo oferece
 
-| Camada | Onde fica | Responsabilidade |
-|---|---|---|
-| Interface | `src/app/page.tsx`, `src/app/jogar`, `src/app/admin`, `src/components/game/GameShow.tsx` | Renderiza o estado recebido do servidor; não decide regras |
-| Motor de jogo (puro) | `src/lib/game/engine.ts` | Máquina de estados, premiação, pontos de segurança, ajudas, seleção de perguntas |
-| Orquestração | `src/lib/game/service.ts` | Transações com `SELECT ... FOR UPDATE`, controle de versão, registro de respostas |
-| Banco de perguntas | `src/lib/bank/*`, `src/data/bank/*`, tabela `questions` | Importação validada, deduplicação, semeadura automática |
-| Qualidade | `src/lib/bank/quality.ts` | Regras de validação (alternativas, resposta única, justificativa, fonte, ambiguidade) |
-| Configuração | `src/lib/config.ts`, tabela `settings` | Premiação, segurança, limites de ajuda, falas, tempo, modos |
-| Autenticação | `src/lib/auth.ts`, tabelas `users`/`sessions` | Scrypt, sessão em cookie httpOnly, papéis `player`/`admin` |
-| Estatísticas | `src/lib/stats.ts` | Desempenho, categorias, evolução, histórico, ranking |
-| IA (opcional) | `src/lib/ai.ts` | Geração e revisão com API compatível com OpenAI; saída sempre validada |
-| Áudio | `src/lib/audio/studio.ts` | Música procedural, efeitos, barramentos e narração (Web Speech API) |
+- Modo Clássico, com 17 níveis e pontos de segurança.
+- Modo Infinito.
+- Modo Rápido.
+- Modo Sobrevivência, com vidas.
+- Modo por Categorias.
+- Modo Treinamento, em que errar não encerra a partida.
+- Desafio Diário, com perguntas iguais para todos naquele dia e uma tentativa.
+- Ajudas durante as partidas.
+- Histórico, estatísticas e ranking.
+- Painel administrativo para gerenciar configurações e perguntas.
+- Apresentador com legendas e narração, quando o navegador ou dispositivo oferece suporte.
+- Trilha sonora e efeitos sonoros produzidos pelo próprio jogo.
 
-Regras essenciais (acerto, erro, desistência, ajudas, limites) são aplicadas no servidor. O cliente nunca recebe a alternativa correta antes da revelação (verificado no teste de fluxo).
+O nome, a identidade visual, o cenário, as músicas e as vozes utilizados no projeto são originais. O jogo não utiliza marcas, gravações ou a voz de Silvio Santos.
 
-### Máquina de estados
+## Tecnologias
 
-`awaiting_choice` → (select/troca) → `locked` (confirmação, irreversível) → `revealed` (revelação idempotente, registra resposta uma única vez) → `awaiting_choice` (próxima pergunta, apenas após revelação) ou `finished` (vitória, derrota, desistência).
+- Next.js 16
+- React 19
+- TypeScript
+- PostgreSQL
+- Drizzle ORM
+- Web Audio API
+- Web Speech API
 
-Proteções: versão otimista por partida (`version`), bloqueio de linha em transação, trava síncrona no cliente contra cliques repetidos, recuperação da partida ao atualizar a página (a fase `locked` é revelada novamente de forma idempotente).
+## Como executar localmente
 
-## Instalação e execução
+### Requisitos
 
-1. Configure `DATABASE_URL` no `.env` (PostgreSQL local).
-2. Aplique o esquema: `npx drizzle-kit push`.
-3. Desenvolvimento: `npm run dev`. Produção: `npm run build && npm run start`.
-4. O banco oficial é semeado automaticamente na primeira consulta (`ensureBankSeeded`).
+- Node.js
+- npm
+- PostgreSQL
 
-### Criar um administrador
+### Instalação
 
-Não há conta padrão com senha no código. Cadastre-se pela tela inicial e promova a conta:
+Clone o repositório e entre na pasta do projeto:
 
-```sql
-UPDATE users SET role = 'admin' WHERE username = 'seu_usuario';
+```bash
+git clone <URL_DO_REPOSITORIO>
+cd <PASTA_DO_PROJETO>
+npm install
 ```
 
-### Variáveis de ambiente opcionais
+Crie um arquivo `.env` na raiz e configure a conexão com o PostgreSQL:
 
-| Variável | Uso |
-|---|---|
-| `AI_API_KEY` ou `OPENAI_API_KEY` | Habilita geração/revisão por IA (sem chave, o recurso fica desativado) |
-| `AI_BASE_URL` | Endpoint compatível com Chat Completions (padrão: OpenAI) |
-| `AI_MODEL` | Modelo (padrão: `gpt-4o-mini`) |
-| `COOKIE_SECURE` | `false` apenas para testes em HTTP local |
+```env
+DATABASE_URL=postgresql://usuario:senha@localhost:5432/palco_do_saber
+```
+
+Aplique o esquema do banco:
+
+```bash
+npx drizzle-kit push
+```
+
+Inicie o ambiente de desenvolvimento:
+
+```bash
+npm run dev
+```
+
+A aplicação ficará disponível, por padrão, em `http://localhost:3000`.
+
+Para executar em produção localmente:
+
+```bash
+npm run build
+npm run start
+```
+
+O banco de perguntas inicial é carregado automaticamente na primeira consulta, caso ainda não tenha sido inicializado.
 
 ## Banco de perguntas
 
-- **Quantidade atual validada automaticamente: 219 perguntas ativas** (blocos em `src/data/bank/bloco-01..05.ts`), com 30 categorias de conteúdo, 6 níveis de dificuldade, justificativa e fonte em cada item.
-- **Meta de 5.000 perguntas NÃO foi atingida.** A base atual foi redigida pela equipe a partir de conhecimento geral consolidado e passou pelas validações automáticas (formato, resposta única, duplicidade, justificativa, fonte). **Não houve revisão humana independente por fontes primárias.** Essa etapa é necessária antes de qualquer declaração de precisão.
-- Expansão: criar novos blocos e registrá-los em `src/data/bank/index.ts`, importar texto pelo painel (com validação prévia), ou gerar com IA (entram inativas e aguardam aprovação humana).
-- Direitos: não houve acesso ao acervo do Show do Milhão nem a qualquer base de terceiros. Não há extração de bancos protegidos. A licença de cada item é "Original do projeto".
+A versão atual conta com **219 perguntas ativas**, distribuídas em 30 categorias e 6 níveis de dificuldade.
+
+Cada pergunta possui alternativas, resposta, justificativa e fonte. A base passa por verificações automáticas de estrutura, duplicidade e consistência.
+
+A meta de 5.000 perguntas ainda não foi alcançada. A ampliação do banco pode ser feita por novos blocos de perguntas ou pela importação de conteúdo pelo painel, com validação antes de entrar no jogo.
 
 ## Modos de jogo
 
-Clássico (17 níveis, pontos de segurança), Infinito, Rápido, Sobrevivência (vidas), Categorias, Treinamento (erro não encerra) e Desafio diário (mesmas perguntas no dia, uma tentativa por dia, determinístico).
+### Clássico
+São 17 níveis, com pontos de segurança e uma escada de premiação fictícia.
 
-**Multiplayer não foi implementado.** A arquitetura de partidas versionadas e com ações atômicas serve de base, mas faltam salas, sincronização em tempo real e controle de tempo compartilhado.
+### Infinito
+Continue respondendo enquanto conseguir avançar.
+
+### Rápido
+Uma experiência mais curta, voltada para partidas rápidas.
+
+### Sobrevivência
+O jogador tem um número limitado de vidas.
+
+### Categorias
+Partidas focadas em temas específicos.
+
+### Treinamento
+Permite aprender e continuar mesmo após uma resposta errada.
+
+### Desafio Diário
+Uma partida diária com perguntas definidas para aquele dia. Cada jogador tem uma tentativa.
 
 ## Ajudas
 
-- Cartas: quatro cartas; a indicação tem intensidade variável (forte, média ou fraca).
-- Eliminar 2: remove duas alternativas erradas, mantendo a correta.
-- Plateia: votação **simulada**, sempre rotulada como não sendo pesquisa real.
-- Apresentador: dica da pergunta (campo `hint`) ou dica genérica; nunca revela a alternativa.
+- **Cartas:** indicação com diferentes níveis de intensidade.
+- **Eliminar 2:** remove duas alternativas incorretas.
+- **Plateia:** apresenta uma votação simulada, identificada como fictícia.
+- **Apresentador:** oferece uma dica da pergunta, quando disponível, ou uma dica genérica.
 
-Limites por partida configuráveis; cada ajuda uma vez por pergunta.
+As ajudas possuem limites configuráveis e podem ser utilizadas uma vez por pergunta.
 
-## Áudio e narração
+## Áudio e apresentação
 
-- Trilha procedural (Web Audio API) cuja intensidade e andamento crescem com o nível. Nenhuma faixa comercial ou de terceiros.
-- Efeitos sintetizados: abertura, seleção, travamento, suspense, acerto, erro, premiação, ajuda, vitória e derrota.
-- Barramentos separados (música, voz, efeitos) com volumes individuais; a música é reduzida durante a narração.
-- Narração pela Web Speech API usando as vozes do próprio sistema/navegador (pt-BR quando disponível). **Sem voz disponível, o jogo segue com legendas.** Modo silencioso e legendas independentes da narração.
-- Falas configuráveis no painel, incluindo a frase especial "Valendo um milhão de taliaruras duras!" (editável).
+A trilha sonora é criada proceduralmente pelo jogo, e os efeitos sonoros são sintetizados. Música, voz e efeitos possuem controles de volume separados.
 
-## Testes executados
+A narração utiliza as vozes disponíveis no navegador ou no dispositivo. Quando não há uma voz compatível, o jogo continua com as legendas. Também é possível jogar no modo silencioso.
+
+As falas do apresentador podem ser ajustadas pelo painel administrativo.
+
+## Conta e administração
+
+O jogo possui cadastro, autenticação e perfis de jogador e administrador. Não existe uma conta administrativa padrão incluída no código.
+
+Para criar um administrador:
+
+1. Cadastre uma conta normalmente pela tela inicial.
+2. Acesse o banco PostgreSQL.
+3. Altere o perfil da conta desejada:
+
+```sql
+UPDATE users
+SET role = 'admin'
+WHERE username = 'seu_usuario';
+```
+
+Substitua `seu_usuario` pelo nome cadastrado.
+
+## Configurações
+
+As configurações gerais do jogo são armazenadas no banco de dados e podem ser ajustadas pelo painel administrativo, incluindo regras de premiação, limites de ajudas, falas e opções de partida.
+
+## Testes
+
+O projeto passou pelas seguintes verificações durante o desenvolvimento:
 
 | Verificação | Resultado |
 |---|---|
-| `npx next typegen` | Aprovado |
-| `tsc --noEmit` | Aprovado, sem erros |
-| `node --env-file=.env --import tsx --test tests/engine.test.ts` | **30/30 aprovados** |
-| `npm run build` | Aprovado |
-| `build_and_start` (banco, build, start, `/api/health`) | Aprovado |
-| Teste de fluxo real via HTTP (produção local) | Cadastro, banco semeado com 219 perguntas, partida iniciada, sem vazamento da resposta correta no estado, troca de alternativa antes de confirmar, bloqueio após confirmação, **5 revelações simultâneas: 1 processada (200) e 4 rejeitadas (409), 1 registro em `answer_log`**, versão obsoleta rejeitada (409), desistência, encerramento e acesso administrativo |
+| Geração de tipos do Next.js | Aprovada |
+| TypeScript | Aprovado |
+| Testes do motor de jogo | 30 testes aprovados |
+| Build de produção | Aprovado |
+| Inicialização com banco e endpoint de saúde | Aprovada |
+| Fluxo HTTP de cadastro e partida | Aprovado |
 
-Cobertura dos testes unitários: premiação e segurança, máquina de estados, troca e bloqueio de alternativa, revelação idempotente, desistência, ajudas (50/50, plateia simulada, cartas, limites, uma vez por pergunta), vitória, treinamento, sobrevivência, rápido, tempo esgotado, visão pública sem resposta, seleção sem repetição, desafio diário determinístico, validação de qualidade e integridade de todas as perguntas do banco.
+Os testes cobrem regras de premiação, estados da partida, seleção e confirmação de alternativas, revelação de respostas, desistência, ajudas, modos de jogo, desafio diário e validação do banco de perguntas.
 
-**Problema encontrado e corrigido:** a tentativa de alterar uma resposta já confirmada retornava HTTP 500. Foi mapeada para 409 (`GameRuleError`). A correção passou por tipagem, testes e build e a aplicação foi reiniciada, mas **essa requisição específica não foi repetida no fluxo HTTP após a correção**.
+Ainda há etapas que precisam de testes em navegadores e dispositivos reais, especialmente áudio, narração, interface móvel e comportamento sob carga.
 
-**Não testado:** interface em navegador real (inclusive dispositivos móveis), narração e áudio em navegadores diferentes, geração por IA (nenhuma chave configurada), limites de carga.
+## Limitações atuais
 
-## Limitações conhecidas e pendências
+- O banco possui 219 perguntas; a meta de 5.000 ainda está em andamento.
+- As perguntas ainda precisam de revisão humana independente, com consulta às fontes originais.
+- O modo multiplayer não está implementado.
+- A opção de reiniciar o progresso mediante confirmação ainda não está implementada.
+- Não existe uma tela dedicada para gerenciamento de categorias.
+- O cronômetro utiliza o relógio do cliente, com validação do prazo no servidor ao confirmar.
+- A criação de administradores é feita manualmente no banco.
+- A versão atual não possui instalação como PWA.
+- A narração depende das vozes disponíveis no dispositivo.
+- Limites de requisições e testes automatizados de interface ainda não foram implementados.
 
-- Banco com 219 de 5.000 perguntas; revisão humana por fontes primárias pendente.
-- Multiplayer não implementado.
-- "Reiniciar progresso mediante confirmação" não implementado.
-- Gestão de categorias é feita pela digitação de uma nova categoria na pergunta (sem tela dedicada).
-- Explicação por IA para o modo aprendizagem não implementada; o jogo mostra a justificativa e a fonte curadas.
-- Cronômetro usa o relógio do cliente; o servidor valida o prazo somente ao confirmar.
-- Criação de administradores é manual (SQL), por decisão de segurança.
-- Sem PWA instalável nesta versão.
-- Narração depende das vozes instaladas no dispositivo.
-- Estado de partida e sessão não têm limitação de taxa (rate limiting) implementada.
-- Testes de interface automatizados (ex.: Playwright) não foram incluídos.
+## Licença
+
+Este projeto é de uso próprio. Os elementos originais desenvolvidos para o Palco do Saber não devem ser reproduzidos ou distribuídos sem autorização.
